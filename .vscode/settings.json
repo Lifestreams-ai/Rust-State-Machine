@@ -1,0 +1,23 @@
+{
+  "rust-analyzer.linkedProjects": [
+    "./Cargo.toml",
+    // "./apps/Cargo.toml"
+  ],
+  "editor.formatOnPaste": true,
+  "editor.formatOnSave": true,
+  "files.exclude": {
+    "**/.DS_Store": true,
+    "**/.git": true,
+    "**/target": true,
+    "**/.idea": true,
+    "**/*.iml": true
+  },
+  "rust-analyzer.cargo.features": "all",
+  "oso.polarLanguageServer.validations": "cloud",
+  "explorer.autoReveal": true,
+  "protoc": {
+    "options": [
+      "--proto_path=apps/protos",
+    ],
+  },
+}
