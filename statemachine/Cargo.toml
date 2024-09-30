@@ -2,13 +2,15 @@
 name = "statemachine"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.66"
-authors = ["Maxim Deloof"]
+rust-version = "1.81"
+authors = ["Hamed M"]
 license = "MIT"
-description = "Hierarchical state machines for designing event-driven systems"
+description = "A simple and extensible state machine implementation in Rust"
 readme = "../README.md"
-repository = "https://github.com/mdeloof/statig"
-keywords = ["fsm", "hsm", "statechart", "state-machine", "embedded"]
+repository = "https://github.com/Lifestreams-ai/statemachine"
+categories = ["state-machine", "embedded", "automation"]
+keywords = ["fsm", "statechart", "state-machine", "embedded", "automation"]
+# hsm
 
 [dependencies]
 log = "0.4"
