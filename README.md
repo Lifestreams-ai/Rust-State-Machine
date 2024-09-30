@@ -2,12 +2,13 @@
 # State Machine in Rust
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-<!-- [![Build Status](https://img.shields.io/github/actions/workflow/status/Lifestreams-ai/statemachine/build.yml?branch=main)](https://github.com/yourusername/Lifestreams-ai/statemachine/actions) -->
-[![Crates.io](https://img.shields.io/crates/v/statemachine-rust.svg)](https://crates.io/crates/statemachine-rust)
+[![Crates.io](https://img.shields.io/crates/v/statemachine.svg)](https://crates.io/crates/statemachine)
 [![Rust version](https://img.shields.io/badge/Rust-1.65.0-blue)](https://releases.rs/docs/released/1.65.0)
 [![CI](https://github.com/Lifestreams-ai/statemachine/actions/workflows/ci.yml/badge.svg)](https://github.com/Lifestreams-ai/statemachine/actions/workflows/ci.yml)
+<!-- [![Build Status](https://img.shields.io/github/actions/workflow/status/Lifestreams-ai/statemachine/build.yml?branch=main)](https://github.com/yourusername/Lifestreams-ai/statemachine/actions) -->
 
 A simple and extensible state machine implementation in Rust.
+
 <!-- omit in toc -->
 ## Features
 
