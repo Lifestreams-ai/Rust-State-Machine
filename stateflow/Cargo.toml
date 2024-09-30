@@ -8,7 +8,7 @@ license = "MIT"
 description = "A simple and extensible state machine implementation in Rust"
 readme = "../README.md"
 repository = "https://github.com/Lifestreams-ai/statemachine"
-categories = ["state-machine", "embedded", "automation", "workflow"]
+categories = []
 keywords = ["fsm", "state-machine", "embedded", "automation", "workflow"]
 # hsm
 
