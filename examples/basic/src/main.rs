@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 
-use statemachine::{Action, StateMachine};
+use stateflow::{Action, StateMachine};
 
 /// An action handler that prints action details.
 fn action_handler(action: &Action) {

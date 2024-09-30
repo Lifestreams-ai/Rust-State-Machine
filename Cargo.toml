@@ -1,7 +1,7 @@
 [workspace]
 members = [
     # Core statemachine crates
-    "statemachine",
+    "stateflow",
 
     # Examples
     "examples/basic",

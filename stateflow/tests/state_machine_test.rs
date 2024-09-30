@@ -1,4 +1,4 @@
-use statemachine::{Action, StateMachine};
+use stateflow::{Action, StateMachine};
 
 /// A test action handler that prints action details for verification.
 fn test_action_handler(action: &Action) {
