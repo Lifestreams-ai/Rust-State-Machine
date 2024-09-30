@@ -1,43 +1,14 @@
+<!-- omit in toc -->
 # State Machine in Rust
 
-*A simple and extensible state machine implementation in Rust.*
-
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/Lifestreams-ai/statemachine/build.yml?branch=main)](https://github.com/yourusername/Lifestreams-ai/statemachine/actions)
+<!-- [![Build Status](https://img.shields.io/github/actions/workflow/status/Lifestreams-ai/statemachine/build.yml?branch=main)](https://github.com/yourusername/Lifestreams-ai/statemachine/actions) -->
 [![Crates.io](https://img.shields.io/crates/v/statemachine-rust.svg)](https://crates.io/crates/statemachine-rust)
 [![Rust version](https://img.shields.io/badge/Rust-1.65.0-blue)](https://releases.rs/docs/released/1.65.0)
 [![CI](https://github.com/Lifestreams-ai/statemachine/actions/workflows/ci.yml/badge.svg)](https://github.com/Lifestreams-ai/statemachine/actions/workflows/ci.yml)
 
-## Table of Contents
-
-- [State Machine in Rust](#state-machine-in-rust)
-  - [Table of Contents](#table-of-contents)
-  - [Introduction](#introduction)
-  - [Features](#features)
-  - [Installation](#installation)
-    - [Prerequisites](#prerequisites)
-    - [Steps](#steps)
-  - [Usage](#usage)
-    - [1. Define Your Configuration](#1-define-your-configuration)
-    - [2. Implement the Action Handler](#2-implement-the-action-handler)
-    - [3. Initialize the State Machine](#3-initialize-the-state-machine)
-    - [4. Run Your Application](#4-run-your-application)
-  - [Configuration](#configuration)
-  - [Contributing](#contributing)
-  - [License](#license)
-  - [Credits](#credits)
-  - [Support](#support)
-  - [Changelog](#changelog)
-  - [Roadmap](#roadmap)
-  - [FAQ](#faq)
-  - [Code of Conduct](#code-of-conduct)
-
-## Introduction
-
-This project provides a simple and extensible state machine implementation in Rust. It allows for defining states, transitions, and actions triggered during state changes. The state machine configuration can be loaded from a JSON file, and custom actions can be executed on state transitions using a user-defined action handler.
-
-- **Why this project?** State machines are essential for managing complex state-dependent logic. This library simplifies the creation and management of state machines in Rust applications.
-
+A simple and extensible state machine implementation in Rust.
+<!-- omit in toc -->
 ## Features
 
 - **JSON Configuration**: Define states, events, transitions, and actions via a JSON file.
@@ -47,6 +18,34 @@ This project provides a simple and extensible state machine implementation in Ru
 - **Thread-Safe**: Designed with `Arc` and `RwLock` for safe concurrent use.
 - **State Persistence**: Save and restore the current state for persistent workflows.
 - **Display Trait Implementation**: Visualize the state machine's structure via the `Display` trait.
+
+<!-- omit in toc -->
+## Overview
+
+- [Introduction](#introduction)
+- [Installation](#installation)
+  - [Prerequisites](#prerequisites)
+  - [Steps](#steps)
+- [Usage](#usage)
+  - [1. Define Your Configuration](#1-define-your-configuration)
+  - [2. Implement the Action Handler](#2-implement-the-action-handler)
+  - [3. Initialize the State Machine](#3-initialize-the-state-machine)
+  - [4. Run Your Application](#4-run-your-application)
+- [Configuration](#configuration)
+- [Contributing](#contributing)
+- [License](#license)
+- [Credits](#credits)
+- [Support](#support)
+- [Changelog](#changelog)
+- [Roadmap](#roadmap)
+- [FAQ](#faq)
+- [Code of Conduct](#code-of-conduct)
+
+## Introduction
+
+This project provides a simple and extensible state machine implementation in Rust. It allows for defining states, transitions, and actions triggered during state changes. The state machine configuration can be loaded from a JSON file, and custom actions can be executed on state transitions using a user-defined action handler.
+
+- **Why this project?** State machines are essential for managing complex state-dependent logic. This library simplifies the creation and management of state machines in Rust applications.
 
 ## Installation
 
