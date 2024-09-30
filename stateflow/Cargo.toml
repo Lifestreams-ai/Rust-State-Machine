@@ -9,7 +9,7 @@ description = "A simple and extensible state machine implementation in Rust"
 readme = "../README.md"
 repository = "https://github.com/Lifestreams-ai/statemachine"
 categories = ["state-machine", "embedded", "automation", "workflow"]
-keywords = ["fsm", "statechart", "state-machine", "embedded", "automation", "workflow"]
+keywords = ["fsm", "state-machine", "embedded", "automation", "workflow"]
 # hsm
 
 [dependencies]
