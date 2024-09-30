@@ -3,7 +3,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Crates.io](https://img.shields.io/crates/v/statemachine.svg)](https://crates.io/crates/statemachine_x)
-[![Rust version](https://img.shields.io/badge/Rust-1.81.0-blue)](https://releases.rs/docs/released/1.81.0)
+[![Rust version](https://img.shields.io/badge/Rust-1.81.0-blue)](https://releases.rs/docs/1.81.0/)
 [![CI](https://github.com/Lifestreams-ai/statemachine/actions/workflows/ci.yml/badge.svg)](https://github.com/Lifestreams-ai/statemachine/actions/workflows/ci.yml)
 <!-- [![Build Status](https://img.shields.io/github/actions/workflow/status/Lifestreams-ai/statemachine/build.yml?branch=main)](https://github.com/yourusername/Lifestreams-ai/statemachine/actions) -->
 
