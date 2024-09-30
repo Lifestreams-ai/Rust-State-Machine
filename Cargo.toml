@@ -1,10 +1,8 @@
-[package]
-name = "statemachine"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+members = [
+    # Core statemachine crates
+    "statemachine",
 
-[dependencies]
-log = "0.4"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tokio = { version = "1", features = ["full"] }
+    # Examples
+    "examples/basic",
+]
