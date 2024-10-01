@@ -4,5 +4,6 @@ members = [
     "stateflow",
 
     # Examples
-    "examples/basic",
+    "examples/*",
 ]
+resolver = "2"
