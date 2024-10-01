@@ -3,6 +3,8 @@
 use serde_json::{Map, Value};
 use stateflow::{Action, StateMachine};
 
+struct Context {}
+
 fn main() -> Result<(), String> {
     let config_content = r#"
         {
@@ -51,16 +53,18 @@ fn main() -> Result<(), String> {
         ]
         }
     "#;
-    let mut context = Map::new();
-    context.insert("age".to_string(), Value::from(20));
-    context.insert("consent".to_string(), Value::from(true));
+    let mut memory = Map::new();
+    memory.insert("age".to_string(), Value::from(20));
+    memory.insert("consent".to_string(), Value::from(true));
 
-    let action_handler = |action: &Action, _context: &mut Map<String, Value>| {
-        // Handle actions, possibly modifying context
-        println!("Action: {:?}", action);
-    };
+    let action_handler =
+        |action: &Action, _memory: &mut Map<String, Value>, _context: &mut Context| {
+            // Handle actions, possibly modifying memory
+            println!("Action: {:?}", action);
+        };
 
-    let state_machine = StateMachine::new(config_content, None, action_handler, context)?;
+    let state_machine =
+        StateMachine::new(config_content, None, action_handler, memory, Context {})?;
 
     // Now you can trigger events and the validations will be applied
     state_machine.trigger("proceed")?;

@@ -33,7 +33,7 @@ struct Transition {
     validations: Vec<ValidationRule>, // Transition validation rules
 }
 
-/// Represents a validation rule applied to the context.
+/// Represents a validation rule applied to the memory.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ValidationRule {
     field: String,
@@ -80,7 +80,9 @@ struct StateMachineConfig {
 #[derive(Debug, Serialize, Deserialize)]
 struct StateConfig {
     name: String,
+    #[serde(default)]
     on_enter_actions: Vec<ActionConfig>,
+    #[serde(default)]
     on_exit_actions: Vec<ActionConfig>,
     validations: Option<Vec<ValidationRule>>,
 }
@@ -90,6 +92,7 @@ struct TransitionConfig {
     from: String,
     event: String,
     to: String,
+    #[serde(default)]
     actions: Vec<ActionConfig>, // Actions triggered during the transition
     validations: Option<Vec<ValidationRule>>,
 }
@@ -100,29 +103,32 @@ struct ActionConfig {
     command: String,
 }
 
-type ActionHandler = dyn Fn(&Action, &mut Map<String, Value>) + Send + Sync;
+type ActionHandler<C> = dyn Fn(&Action, &mut Map<String, Value>, &mut C) + Send + Sync;
 
-/// The state machine containing all states, the current state, context, and handlers.
-pub struct StateMachine {
+/// The state machine containing all states, the current state, memory, context, and handlers.
+pub struct StateMachine<C> {
     states: Arc<RwLock<HashMap<String, State>>>, // Key: state name, Value: state instance
     current_state: Arc<RwLock<String>>,
-    action_handler: Arc<ActionHandler>, // Callback function for handling actions
-    /// The context or memory of the state machine. Context is a map of key-value pairs
-    pub context: Arc<RwLock<Map<String, Value>>>,
+    action_handler: Arc<ActionHandler<C>>, // Callback function for handling actions
+    /// The memory of the state machine. Memory is a map of key-value pairs
+    pub memory: Arc<RwLock<Map<String, Value>>>,
+    /// The user-provided context
+    pub context: Arc<RwLock<C>>,
 }
 
-impl StateMachine {
+impl<C> StateMachine<C> {
     /// Creates a new state machine from a configuration string, optionally restoring to a specific state.
     /// `initial_state` can be used to restore the machine to a saved state.
-    /// `context` is the mutable state or memory of the state machine.
+    /// `memory` is the mutable state or memory of the state machine.
     pub fn new<F>(
         config_content: &str,
         initial_state: Option<String>,
         action_handler: F,
-        context: Map<String, Value>,
+        memory: Map<String, Value>,
+        context: C,
     ) -> Result<Self, String>
     where
-        F: Fn(&Action, &mut Map<String, Value>) + Send + Sync + 'static,
+        F: Fn(&Action, &mut Map<String, Value>, &mut C) + Send + Sync + 'static,
     {
         // Generate and compile the JSON schema
         let schema = Self::generate_and_compile_schema()?;
@@ -183,6 +189,7 @@ impl StateMachine {
             states: Arc::new(RwLock::new(states)),
             current_state: Arc::new(RwLock::new(current_state)),
             action_handler: Arc::new(action_handler),
+            memory: Arc::new(RwLock::new(memory)),
             context: Arc::new(RwLock::new(context)),
         })
     }
@@ -200,16 +207,18 @@ impl StateMachine {
                     "type": "array",
                     "items": {
                         "type": "object",
-                        "required": ["name", "on_enter_actions", "on_exit_actions"],
+                        "required": ["name"],
                         "properties": {
                             "name": { "type": "string" },
                             "on_enter_actions": {
                                 "type": "array",
-                                "items": { "$ref": "#/definitions/action" }
+                                "items": { "$ref": "#/definitions/action" },
+                                "default": []
                             },
                             "on_exit_actions": {
                                 "type": "array",
-                                "items": { "$ref": "#/definitions/action" }
+                                "items": { "$ref": "#/definitions/action" },
+                                "default": []
                             },
                             "validations": {
                                 "type": "array",
@@ -222,14 +231,15 @@ impl StateMachine {
                     "type": "array",
                     "items": {
                         "type": "object",
-                        "required": ["from", "event", "to", "actions"],
+                        "required": ["from", "event", "to"],
                         "properties": {
                             "from": { "type": "string" },
                             "event": { "type": "string" },
                             "to": { "type": "string" },
                             "actions": {
                                 "type": "array",
-                                "items": { "$ref": "#/definitions/action" }
+                                "items": { "$ref": "#/definitions/action" },
+                                "default": []
                             },
                             "validations": {
                                 "type": "array",
@@ -394,28 +404,29 @@ impl StateMachine {
         let states = self.states.read().unwrap();
 
         if let Some(current_state) = states.get(&current_state_name) {
-            // Get a mutable reference to the context
+            // Get mutable references to the memory and context
+            let mut memory = self.memory.write().unwrap();
             let mut context = self.context.write().unwrap();
 
             // Execute state validations
-            Self::evaluate_validations(&current_state.validations, &context)?;
+            Self::evaluate_validations(&current_state.validations, &memory)?;
 
             if let Some(transition) = current_state.transitions.get(event) {
                 // Execute transition validations
-                Self::evaluate_validations(&transition.validations, &context)?;
+                Self::evaluate_validations(&transition.validations, &memory)?;
 
                 // Execute on-exit actions
-                self.execute_actions(&current_state.on_exit_actions, &mut context);
+                self.execute_actions(&current_state.on_exit_actions, &mut memory, &mut context);
 
                 // Execute transition actions
-                self.execute_actions(&transition.actions, &mut context);
+                self.execute_actions(&transition.actions, &mut memory, &mut context);
 
                 // Set the new current state
                 *self.current_state.write().unwrap() = transition.to_state.clone();
 
                 if let Some(next_state) = states.get(&transition.to_state) {
                     // Execute on-enter actions of the next state
-                    self.execute_actions(&next_state.on_enter_actions, &mut context);
+                    self.execute_actions(&next_state.on_enter_actions, &mut memory, &mut context);
                 }
 
                 log::trace!(
@@ -434,28 +445,33 @@ impl StateMachine {
     }
 
     /// Executes a list of actions using the provided action handler.
-    fn execute_actions(&self, actions: &[Action], context: &mut Map<String, Value>) {
+    fn execute_actions(
+        &self,
+        actions: &[Action],
+        memory: &mut Map<String, Value>,
+        context: &mut C,
+    ) {
         for action in actions {
-            (self.action_handler)(action, context); // Call the user-provided callback with the action and context
+            (self.action_handler)(action, memory, context); // Call the user-provided callback with the action, memory, and context
         }
     }
 
-    /// Evaluates a list of validation rules against the context.
+    /// Evaluates a list of validation rules against the memory.
     fn evaluate_validations(
         validations: &[ValidationRule],
-        context: &Map<String, Value>,
+        memory: &Map<String, Value>,
     ) -> Result<(), String> {
         for validation in validations {
             // Check condition if present
             if let Some(condition) = &validation.condition {
-                if !Self::evaluate_condition(condition, context)? {
+                if !Self::evaluate_condition(condition, memory)? {
                     // Condition not met, skip validation
                     continue;
                 }
             }
 
-            // Get the value from the context
-            let field_value = context.get(&validation.field);
+            // Get the value from the memory
+            let field_value = memory.get(&validation.field);
 
             for rule in &validation.rules {
                 match rule {
@@ -470,7 +486,7 @@ impl StateMachine {
                             }
                         } else {
                             return Err(format!(
-                                "Validation failed: Field '{}' is missing in context",
+                                "Validation failed: Field '{}' is missing in memory",
                                 validation.field
                             ));
                         }
@@ -527,7 +543,7 @@ impl StateMachine {
                             }
                         } else {
                             return Err(format!(
-                                "Validation failed: Field '{}' is missing in context",
+                                "Validation failed: Field '{}' is missing in memory",
                                 validation.field
                             ));
                         }
@@ -538,12 +554,12 @@ impl StateMachine {
         Ok(())
     }
 
-    /// Evaluates a condition against the context.
+    /// Evaluates a condition against the memory.
     fn evaluate_condition(
         condition: &Condition,
-        context: &Map<String, Value>,
+        memory: &Map<String, Value>,
     ) -> Result<bool, String> {
-        let field_value = context.get(&condition.field);
+        let field_value = memory.get(&condition.field);
         if let Some(actual_value) = field_value {
             let result = match condition.operator.as_str() {
                 "==" => actual_value == &condition.value,
@@ -569,7 +585,7 @@ impl StateMachine {
             Ok(result)
         } else {
             Err(format!(
-                "Condition evaluation failed: Field '{}' is missing in context",
+                "Condition evaluation failed: Field '{}' is missing in memory",
                 condition.field
             ))
         }
@@ -632,7 +648,7 @@ impl StateMachine {
 }
 
 /// Implementing the Display trait to render the state machine as a string.
-impl Display for StateMachine {
+impl<C> Display for StateMachine<C> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let states = self.states.read().unwrap();
         let current_state = self.current_state.read().unwrap();

@@ -4,15 +4,17 @@ use serde_json::{Map, Value};
 use stateflow::{Action, StateMachine};
 
 /// An action handler that prints action details.
-fn action_handler(action: &Action, _context: &mut Map<String, Value>) {
+fn action_handler(action: &Action, _memory: &mut Map<String, Value>, _context: &mut Context) {
     println!(
         "Executing action: Type: {}, Command: {}",
         action.action_type, action.command
     );
-    // Optionally modify the context if needed
+    // Optionally modify the memory if needed
     // For example:
-    // context.insert("last_action".to_string(), Value::String(action.command.clone()));
+    // memory.insert("last_action".to_string(), Value::String(action.command.clone()));
 }
+
+struct Context {}
 
 fn main() -> Result<(), String> {
     // JSON string representing the complex state machine configuration
@@ -175,15 +177,16 @@ fn main() -> Result<(), String> {
     }
     "#;
 
-    // Initialize the context (empty in this case)
-    let context = Map::new();
+    // Initialize the memory (empty in this case)
+    let memory = Map::new();
 
-    // Initialize the state machine using the configuration, context, and the action handler
+    // Initialize the state machine using the configuration, memory, and the action handler
     let state_machine = StateMachine::new(
         json_config,
         Some("Idle".to_string()),
         action_handler,
-        context,
+        memory,
+        Context {},
     )
     .expect("Failed to initialize state machine");
 
