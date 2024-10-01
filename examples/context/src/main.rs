@@ -1,5 +1,5 @@
 //! This example demonstrates how to use a custom context struct with the state machine.
-//! 
+//!
 use serde_json::{Map, Value};
 use stateflow::{Action, StateMachine};
 
