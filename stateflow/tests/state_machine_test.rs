@@ -1,5 +1,5 @@
-use stateflow::{Action, StateMachine};
 use serde_json::{Map, Value};
+use stateflow::{Action, StateMachine};
 
 /// A test action handler that prints action details for verification.
 fn test_action_handler_for_complex(action: &Action, _context: &mut Map<String, Value>) {
@@ -274,13 +274,21 @@ fn test_basic_transitions() {
 
     let context = Map::new();
 
-    let state_machine = StateMachine::new(json_config, Some("A".to_string()), test_action_handler, context)
-        .expect("Failed to initialize state machine");
+    let state_machine = StateMachine::new(
+        json_config,
+        Some("A".to_string()),
+        test_action_handler,
+        context,
+    )
+    .expect("Failed to initialize state machine");
 
     assert_eq!(state_machine.get_current_state().unwrap(), "A");
 
     // Trigger the transition
-    assert!(state_machine.trigger("go_to_b").is_ok(), "Failed to transition to state B");
+    assert!(
+        state_machine.trigger("go_to_b").is_ok(),
+        "Failed to transition to state B"
+    );
     assert_eq!(state_machine.get_current_state().unwrap(), "B");
 
     // Attempt an invalid transition
@@ -334,8 +342,13 @@ fn test_state_validations() {
     let mut context = Map::new();
     context.insert("age".to_string(), Value::Number(16.into()));
 
-    let state_machine = StateMachine::new(json_config, Some("Start".to_string()), test_action_handler, context)
-        .expect("Failed to initialize state machine");
+    let state_machine = StateMachine::new(
+        json_config,
+        Some("Start".to_string()),
+        test_action_handler,
+        context,
+    )
+    .expect("Failed to initialize state machine");
 
     // The state validation should fail
     assert!(
@@ -399,8 +412,13 @@ fn test_transition_validations() {
     // Context without the 'approved' field
     let context = Map::new();
 
-    let state_machine = StateMachine::new(json_config, Some("Init".to_string()), test_action_handler, context)
-        .expect("Failed to initialize state machine");
+    let state_machine = StateMachine::new(
+        json_config,
+        Some("Init".to_string()),
+        test_action_handler,
+        context,
+    )
+    .expect("Failed to initialize state machine");
 
     // The transition validation should fail
     assert!(
@@ -469,8 +487,13 @@ fn test_conditional_validations() {
     let mut context = Map::new();
     context.insert("email_required".to_string(), Value::Bool(true));
 
-    let state_machine = StateMachine::new(json_config, Some("Form".to_string()), test_action_handler, context)
-        .expect("Failed to initialize state machine");
+    let state_machine = StateMachine::new(
+        json_config,
+        Some("Form".to_string()),
+        test_action_handler,
+        context,
+    )
+    .expect("Failed to initialize state machine");
 
     // Validation should fail
     assert!(
@@ -480,7 +503,10 @@ fn test_conditional_validations() {
 
     // Provide the email
     let mut context = state_machine.context.write().unwrap();
-    context.insert("email".to_string(), Value::String("user@example.com".to_string()));
+    context.insert(
+        "email".to_string(),
+        Value::String("user@example.com".to_string()),
+    );
     drop(context); // Release the lock
 
     // Now the transition should succeed
@@ -490,7 +516,6 @@ fn test_conditional_validations() {
     );
     assert_eq!(state_machine.get_current_state().unwrap(), "Submitted");
 }
-
 
 /// Test context manipulation within actions without `on_enter_actions` on the start state.
 #[test]
@@ -565,10 +590,7 @@ fn test_context_manipulation() {
     // The on_enter_action in "Counter" should increment the counter
     {
         let context = state_machine.context.read().unwrap();
-        let counter = context
-            .get("counter")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0);
+        let counter = context.get("counter").and_then(|v| v.as_i64()).unwrap_or(0);
         assert_eq!(
             counter, 1,
             "Counter was not incremented on entering Counter state"
@@ -576,18 +598,12 @@ fn test_context_manipulation() {
     }
 
     // Trigger the transition to the "End" state
-    assert!(
-        state_machine.trigger("finish").is_ok(),
-        "Failed to finish"
-    );
+    assert!(state_machine.trigger("finish").is_ok(), "Failed to finish");
 
     // Check that the counter remains the same
     {
         let context = state_machine.context.read().unwrap();
-        let counter = context
-            .get("counter")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0);
+        let counter = context.get("counter").and_then(|v| v.as_i64()).unwrap_or(0);
         assert_eq!(
             counter, 1,
             "Counter changed unexpectedly after transitioning to End state"
@@ -649,8 +665,13 @@ fn test_state_persistence() {
 
     let context = Map::new();
 
-    let state_machine = StateMachine::new(json_config, Some("First".to_string()), test_action_handler, context)
-        .expect("Failed to initialize state machine");
+    let state_machine = StateMachine::new(
+        json_config,
+        Some("First".to_string()),
+        test_action_handler,
+        context,
+    )
+    .expect("Failed to initialize state machine");
 
     // Transition to the next state
     assert!(
@@ -663,8 +684,13 @@ fn test_state_persistence() {
     assert_eq!(current_state, "Second");
 
     // Create a new state machine with the saved state
-    let new_state_machine = StateMachine::new(json_config, Some(current_state.clone()), test_action_handler, Map::new())
-        .expect("Failed to initialize new state machine with saved state");
+    let new_state_machine = StateMachine::new(
+        json_config,
+        Some(current_state.clone()),
+        test_action_handler,
+        Map::new(),
+    )
+    .expect("Failed to initialize new state machine with saved state");
 
     // Verify the state
     assert_eq!(new_state_machine.get_current_state().unwrap(), "Second");
