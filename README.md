@@ -12,13 +12,16 @@ A simple and extensible state machine implementation in Rust.
 <!-- omit in toc -->
 ## Features
 
-- **JSON Configuration**: Define states, events, transitions, and actions via a JSON file.
+- **JSON Configuration**: Define states, events, transitions, actions, and validations via a JSON file.
 - **On-Enter and On-Exit Actions**: Execute specific actions when entering or exiting a state.
 - **Transition Actions**: Perform actions during state transitions.
-- **Custom Action Handler**: Implement your own logic for handling actions.
+- **Custom Action Handler**: Implement your own logic for handling actions, with access to both memory and custom context.
 - **Thread-Safe**: Designed with `Arc` and `RwLock` for safe concurrent use.
 - **State Persistence**: Save and restore the current state for persistent workflows.
 - **Display Trait Implementation**: Visualize the state machine's structure via the `Display` trait.
+- **Data-Driven Validations**: Define validation rules in the configuration to enforce constraints on memory.
+- **Conditional Validations**: Apply validations conditionally based on memory values.
+- **Custom Context Support**: Pass a custom context object to the state machine, accessible in the action handler.
 
 <!-- omit in toc -->
 ## Overview
@@ -44,9 +47,9 @@ A simple and extensible state machine implementation in Rust.
 
 ## Introduction
 
-This project provides a simple and extensible state machine implementation in Rust. It allows for defining states, transitions, and actions triggered during state changes. The state machine configuration can be loaded from a JSON file, and custom actions can be executed on state transitions using a user-defined action handler.
+This project provides a simple and extensible state machine implementation in Rust. It allows for defining states, transitions, actions, and validations triggered during state changes. The state machine configuration can be loaded from a JSON file, and custom actions can be executed on state transitions using a user-defined action handler. The state machine also supports custom context objects, allowing you to maintain additional state or data throughout the state machine's lifecycle.
 
-- **Why this project?** State machines are essential for managing complex state-dependent logic. This library simplifies the creation and management of state machines in Rust applications.
+- **Why this project?** State machines are essential for managing complex state-dependent logic. This library simplifies the creation and management of state machines in Rust applications, providing flexibility and extensibility.
 
 ## Installation
 
@@ -62,7 +65,7 @@ This project provides a simple and extensible state machine implementation in Ru
 
    ```toml
    [dependencies]
-   statemachine-rust = "0.1.0"
+   statemachine-rust = "0.2.0"
    ```
 
 2. **Update Crates**
@@ -87,17 +90,20 @@ Create a `config.json` file:
     {
       "name": "Idle",
       "on_enter_actions": [],
-      "on_exit_actions": []
+      "on_exit_actions": [],
+      "validations": []
     },
     {
       "name": "Processing",
       "on_enter_actions": [],
-      "on_exit_actions": []
+      "on_exit_actions": [],
+      "validations": []
     },
     {
       "name": "Finished",
       "on_enter_actions": [],
-      "on_exit_actions": []
+      "on_exit_actions": [],
+      "validations": []
     }
   ],
   "transitions": [
@@ -105,13 +111,15 @@ Create a `config.json` file:
       "from": "Idle",
       "event": "start",
       "to": "Processing",
-      "actions": []
+      "actions": [],
+      "validations": []
     },
     {
       "from": "Processing",
       "event": "finish",
       "to": "Finished",
-      "actions": []
+      "actions": [],
+      "validations": []
     }
   ]
 }
@@ -119,14 +127,24 @@ Create a `config.json` file:
 
 ### 2. Implement the Action Handler
 
-Create a function to handle actions:
+Create a function to handle actions, with access to both the memory and your custom context:
 
 ```rust
-use statemachine_rust::{Action, StateMachine};
+use stateflow::{Action, StateMachine};
+use serde_json::{Map, Value};
 
-fn action_handler(action: &Action) {
+struct MyContext {
+    // Your custom context fields
+    counter: i32,
+}
+
+fn action_handler(action: &Action, memory: &mut Map<String, Value>, context: &mut MyContext) {
     match action.action_type.as_str() {
         "log" => println!("Logging: {}", action.command),
+        "increment_counter" => {
+            context.counter += 1;
+            println!("Counter incremented to {}", context.counter);
+        },
         _ => eprintln!("Unknown action: {}", action.command),
     }
 }
@@ -135,22 +153,37 @@ fn action_handler(action: &Action) {
 ### 3. Initialize the State Machine
 
 ```rust
-use statemachine_rust::StateMachine;
+use stateflow::StateMachine;
+use serde_json::{Map, Value};
 use std::fs;
 
 fn main() -> Result<(), String> {
     let config_content = fs::read_to_string("config.json")
         .map_err(|e| format!("Failed to read config file: {}", e))?;
 
-    let state_machine = StateMachine::new_with_config(
+    // Initialize memory (can be empty or pre-populated)
+    let memory = Map::new();
+
+    // Initialize your custom context
+    let context = MyContext { counter: 0 };
+
+    let state_machine = StateMachine::new(
         &config_content,
-        None,
+        Some("Idle".to_string()),
         action_handler,
+        memory,
+        context,
     )?;
 
     // Trigger events
     state_machine.trigger("start")?;
     state_machine.trigger("finish")?;
+
+    // Access the context after transitions
+    {
+        let context = state_machine.context.read().unwrap();
+        println!("Final counter value: {}", context.counter);
+    }
 
     Ok(())
 }
@@ -168,16 +201,44 @@ cargo run
 
 The state machine is highly configurable via a JSON file.
 
-- **States**: Define each state's `name`, `on_enter_actions`, and `on_exit_actions`.
-- **Transitions**: Specify `from` state, `event` triggering the transition, `to` state, and any `actions`.
+- **States**: Define each state's `name`, `on_enter_actions`, `on_exit_actions`, and `validations`.
+- **Transitions**: Specify `from` state, `event` triggering the transition, `to` state, any `actions`, and `validations`.
 - **Actions**: Each action includes an `action_type` and a `command`, which the action handler interprets.
+- **Validations**: Define validation rules to enforce constraints on memory fields, with optional conditions.
 
-Example of an action:
+Example of a state with validations:
 
 ```json
 {
-  "action_type": "log",
-  "command": "Transitioning to Processing state"
+  "name": "Processing",
+  "on_enter_actions": [],
+  "on_exit_actions": [],
+  "validations": [
+    {
+      "field": "age",
+      "rules": [
+        { "type": "type_check", "expected_type": "number" },
+        { "type": "min_value", "value": 18 }
+      ]
+    }
+  ]
+}
+```
+
+Example of a transition with an action:
+
+```json
+{
+  "from": "Idle",
+  "event": "start",
+  "to": "Processing",
+  "actions": [
+    {
+      "action_type": "log",
+      "command": "Transitioning to Processing state"
+    }
+  ],
+  "validations": []
 }
 ```
 
@@ -210,11 +271,12 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 ## Credits
 
 - **[Serde](https://serde.rs/)**: For serialization and deserialization.
+- **[JSON Schema](https://json-schema.org/)**: For configuration validation.
 - **Rust Community**: For the rich ecosystem and support.
 
 ## Support
 
-If you have any questions or issues, please open an issue on [GitHub](https://github.com/yourusername/statemachine-rust/issues).
+If you have any questions or issues, please open an issue on [GitHub](https://github.com/Lifestreams-ai/stateflow/issues).
 
 ## Changelog
 
@@ -225,6 +287,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 - **Async Actions**: Support for asynchronous action handling.
 - **Visualization Tools**: Generate visual diagrams of the state machine.
 - **Enhanced Error Handling**: More descriptive errors and debugging tools.
+- **Extended Validations**: Support for more complex validation rules.
 
 ## FAQ
 
@@ -236,10 +299,14 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 **A**: Implement your logic within the `action_handler` function based on the `action_type`.
 
+**Q**: Can I pass my own context to the state machine?
+
+**A**: Yes, you can pass a custom context of any type to the state machine, which is accessible in the action handler.
+
 ## Code of Conduct
 
 We expect all contributors to adhere to our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ---
 
-*This README was generated to provide a comprehensive overview of the State Machine in Rust project. We hope it helps you get started quickly!*
+*This README was updated to provide a comprehensive overview of the State Machine in Rust project. We hope it helps you get started quickly!*
