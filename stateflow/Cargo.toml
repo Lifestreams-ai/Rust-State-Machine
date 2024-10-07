@@ -13,7 +13,7 @@ keywords = ["fsm", "state-machine", "embedded", "automation", "workflow"]
 # hsm
 
 [dependencies]
-jsonschema = "0.21"
+jsonschema = "0.22"
 log = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
