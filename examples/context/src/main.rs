@@ -9,7 +9,11 @@ struct MyContext {
 }
 
 /// An action handler that uses the context to modify its state.
-fn action_handler(action: &Action, _memory: &mut Map<String, Value>, context: &mut MyContext) {
+async fn action_handler(
+    action: &Action,
+    _memory: &mut Map<String, Value>,
+    context: &mut MyContext,
+) {
     println!(
         "Executing action: Type: {}, Command: {}",
         action.action_type, action.command
@@ -21,7 +25,8 @@ fn action_handler(action: &Action, _memory: &mut Map<String, Value>, context: &m
     }
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     // JSON configuration with actions that use the context
     let json_config = r#"
     {
@@ -101,7 +106,7 @@ fn main() {
     let state_machine = StateMachine::new(
         json_config,
         Some("Init".to_string()),
-        action_handler,
+        |action, memory, context| Box::pin(action_handler(action, memory, context)),
         memory,
         context,
     )
@@ -109,13 +114,13 @@ fn main() {
 
     // Transition to "Counting" state, which should increment the counter to 1
     assert!(
-        state_machine.trigger("start_counting").is_ok(),
+        state_machine.trigger("start_counting").await.is_ok(),
         "Failed to start counting"
     );
 
     // Verify that the context counter is 1
     {
-        let context = state_machine.context.read().unwrap();
+        let context = state_machine.context.read().await;
         assert_eq!(
             context.counter, 1,
             "Counter should be 1 after first increment"
@@ -124,13 +129,13 @@ fn main() {
 
     // Trigger the "increment" event to increment the counter
     assert!(
-        state_machine.trigger("increment").is_ok(),
+        state_machine.trigger("increment").await.is_ok(),
         "Failed to increment counter"
     );
 
     // Verify that the context counter is 3
     {
-        let context = state_machine.context.read().unwrap();
+        let context = state_machine.context.read().await;
         assert_eq!(
             context.counter, 3,
             "Counter should be 3 after second increment"
@@ -139,25 +144,25 @@ fn main() {
 
     // Reset the counter by transitioning to the "Reset" state
     assert!(
-        state_machine.trigger("reset").is_ok(),
+        state_machine.trigger("reset").await.is_ok(),
         "Failed to reset counter"
     );
 
     // Verify that the context counter is reset to 0
     {
-        let context = state_machine.context.read().unwrap();
+        let context = state_machine.context.read().await;
         assert_eq!(context.counter, 0, "Counter should be reset to 0");
     }
 
     // Start counting again
     assert!(
-        state_machine.trigger("start_counting").is_ok(),
+        state_machine.trigger("start_counting").await.is_ok(),
         "Failed to start counting again"
     );
 
     // Verify that the context counter is incremented to 1
     {
-        let context = state_machine.context.read().unwrap();
+        let context = state_machine.context.read().await;
         assert_eq!(
             context.counter, 1,
             "Counter should be 1 after restarting counting"

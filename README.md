@@ -1,13 +1,12 @@
 <!-- omit in toc -->
-# State Machine in Rust
+# Stateflow: A State Machine Library in Rust
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Crates.io](https://img.shields.io/crates/v/stateflow.svg)](https://crates.io/crates/stateflow)
 [![Rust version](https://img.shields.io/badge/Rust-1.81.0-blue)](https://releases.rs/docs/1.81.0/)
 [![CI](https://github.com/Lifestreams-ai/statemachine/actions/workflows/ci.yml/badge.svg)](https://github.com/Lifestreams-ai/statemachine/actions/workflows/ci.yml)
-<!-- [![Build Status](https://img.shields.io/github/actions/workflow/status/Lifestreams-ai/statemachine/build.yml?branch=main)](https://github.com/yourusername/Lifestreams-ai/statemachine/actions) -->
 
-A simple and extensible state machine implementation in Rust.
+A simple and extensible state machine library in Rust.
 
 <!-- omit in toc -->
 ## Features
@@ -15,6 +14,7 @@ A simple and extensible state machine implementation in Rust.
 - **JSON Configuration**: Define states, events, transitions, actions, and validations via a JSON file.
 - **On-Enter and On-Exit Actions**: Execute specific actions when entering or exiting a state.
 - **Transition Actions**: Perform actions during state transitions.
+- **Asynchronous Action Handling**: Support for asynchronous action execution.
 - **Custom Action Handler**: Implement your own logic for handling actions, with access to both memory and custom context.
 - **Thread-Safe**: Designed with `Arc` and `RwLock` for safe concurrent use.
 - **State Persistence**: Save and restore the current state for persistent workflows.
@@ -24,7 +24,7 @@ A simple and extensible state machine implementation in Rust.
 - **Custom Context Support**: Pass a custom context object to the state machine, accessible in the action handler.
 
 <!-- omit in toc -->
-## Overview
+## Table of Contents
 
 - [Introduction](#introduction)
 - [Installation](#installation)
@@ -47,7 +47,7 @@ A simple and extensible state machine implementation in Rust.
 
 ## Introduction
 
-This project provides a simple and extensible state machine implementation in Rust. It allows for defining states, transitions, actions, and validations triggered during state changes. The state machine configuration can be loaded from a JSON file, and custom actions can be executed on state transitions using a user-defined action handler. The state machine also supports custom context objects, allowing you to maintain additional state or data throughout the state machine's lifecycle.
+This project provides a simple and extensible state machine library in Rust. It allows for defining states, transitions, actions, and validations triggered during state changes. The state machine configuration can be loaded from a JSON file, and custom actions can be executed on state transitions using a user-defined action handler. The state machine also supports custom context objects, allowing you to maintain additional state or data throughout the state machine's lifecycle.
 
 - **Why this project?** State machines are essential for managing complex state-dependent logic. This library simplifies the creation and management of state machines in Rust applications, providing flexibility and extensibility.
 
@@ -65,7 +65,7 @@ This project provides a simple and extensible state machine implementation in Ru
 
    ```toml
    [dependencies]
-   statemachine-rust = "0.2.0"
+   stateflow = "0.3.0"
    ```
 
 2. **Update Crates**
@@ -127,7 +127,7 @@ Create a `config.json` file:
 
 ### 2. Implement the Action Handler
 
-Create a function to handle actions, with access to both the memory and your custom context:
+Create an asynchronous function to handle actions, with access to both the memory and your custom context:
 
 ```rust
 use stateflow::{Action, StateMachine};
@@ -138,13 +138,17 @@ struct MyContext {
     counter: i32,
 }
 
-fn action_handler(action: &Action, memory: &mut Map<String, Value>, context: &mut MyContext) {
+async fn action_handler(
+    action: &Action,
+    memory: &mut Map<String, Value>,
+    context: &mut MyContext,
+) {
     match action.action_type.as_str() {
         "log" => println!("Logging: {}", action.command),
         "increment_counter" => {
             context.counter += 1;
             println!("Counter incremented to {}", context.counter);
-        },
+        }
         _ => eprintln!("Unknown action: {}", action.command),
     }
 }
@@ -157,7 +161,8 @@ use stateflow::StateMachine;
 use serde_json::{Map, Value};
 use std::fs;
 
-fn main() -> Result<(), String> {
+#[tokio::main]
+async fn main() -> Result<(), String> {
     let config_content = fs::read_to_string("config.json")
         .map_err(|e| format!("Failed to read config file: {}", e))?;
 
@@ -170,18 +175,18 @@ fn main() -> Result<(), String> {
     let state_machine = StateMachine::new(
         &config_content,
         Some("Idle".to_string()),
-        action_handler,
+        |action, memory, context| Box::pin(action_handler(action, memory, context)),
         memory,
         context,
     )?;
 
     // Trigger events
-    state_machine.trigger("start")?;
-    state_machine.trigger("finish")?;
+    state_machine.trigger("start").await?;
+    state_machine.trigger("finish").await?;
 
     // Access the context after transitions
     {
-        let context = state_machine.context.read().unwrap();
+        let context = state_machine.context.read().await;
         println!("Final counter value: {}", context.counter);
     }
 
@@ -284,10 +289,10 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 ## Roadmap
 
-- **Async Actions**: Support for asynchronous action handling.
 - **Visualization Tools**: Generate visual diagrams of the state machine.
 - **Enhanced Error Handling**: More descriptive errors and debugging tools.
 - **Extended Validations**: Support for more complex validation rules.
+- **Integration Examples**: Provide more examples and use cases.
 
 ## FAQ
 
@@ -309,4 +314,4 @@ We expect all contributors to adhere to our [Code of Conduct](CODE_OF_CONDUCT.md
 
 ---
 
-*This README was updated to provide a comprehensive overview of the State Machine in Rust project. We hope it helps you get started quickly!*
+*This README was updated to provide a comprehensive overview of the Stateflow library in Rust. We hope it helps you get started quickly!*
