@@ -1,0 +1,9 @@
+[package]
+name = "async-basic"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+stateflow = { path = "../../stateflow" }
+tokio = "1"
+serde_json = "1"
