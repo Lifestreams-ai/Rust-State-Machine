@@ -4,7 +4,7 @@ use serde_json::{Map, Value};
 use stateflow::{Action, StateMachine};
 
 /// An action handler that prints action details.
-fn action_handler(action: &Action, _memory: &mut Map<String, Value>, _context: &mut Context) {
+async fn action_handler(action: &Action, _memory: &mut Map<String, Value>, _context: &mut Context) {
     println!(
         "Executing action: Type: {}, Command: {}",
         action.action_type, action.command
@@ -16,7 +16,8 @@ fn action_handler(action: &Action, _memory: &mut Map<String, Value>, _context: &
 
 struct Context {}
 
-fn main() -> Result<(), String> {
+#[tokio::main]
+async fn main() -> Result<(), String> {
     // JSON string representing the complex state machine configuration
     let json_config = r#"
     {
@@ -184,7 +185,7 @@ fn main() -> Result<(), String> {
     let state_machine = StateMachine::new(
         json_config,
         Some("Idle".to_string()),
-        action_handler,
+        |action, memory, context| Box::pin(action_handler(action, memory, context)),
         memory,
         Context {},
     )
@@ -194,20 +195,20 @@ fn main() -> Result<(), String> {
     println!("{}", state_machine);
 
     // Trigger events and handle results
-    state_machine.trigger("Start")?;
+    state_machine.trigger("Start").await?;
     println!("{}", state_machine);
 
-    state_machine.trigger("Pause")?;
+    state_machine.trigger("Pause").await?;
     println!("{}", state_machine);
 
-    state_machine.trigger("Resume")?;
+    state_machine.trigger("Resume").await?;
     println!("{}", state_machine);
 
-    state_machine.trigger("Complete")?;
+    state_machine.trigger("Complete").await?;
     println!("{}", state_machine);
 
     // This transition should fail because "Completed" state does not have a "Fail" transition
-    if let Err(e) = state_machine.trigger("Fail") {
+    if let Err(e) = state_machine.trigger("Fail").await {
         println!("Expected failure: {}", e);
     } else {
         println!("Unexpectedly succeeded in failing from a completed state");

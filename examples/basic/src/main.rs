@@ -5,7 +5,8 @@ use stateflow::{Action, StateMachine};
 
 struct Context {}
 
-fn main() -> Result<(), String> {
+#[tokio::main]
+async fn main() -> Result<(), String> {
     let config_content = r#"
         {
         "states": [
@@ -53,21 +54,32 @@ fn main() -> Result<(), String> {
         ]
         }
     "#;
+
     let mut memory = Map::new();
     memory.insert("age".to_string(), Value::from(20));
     memory.insert("consent".to_string(), Value::from(true));
 
-    let action_handler =
-        |action: &Action, _memory: &mut Map<String, Value>, _context: &mut Context| {
-            // Handle actions, possibly modifying memory
-            println!("Action: {:?}", action);
-        };
+    // Define the action handler as an async function
+    async fn action_handler(
+        action: &Action,
+        _memory: &mut Map<String, Value>,
+        _context: &mut Context,
+    ) {
+        // Handle actions, possibly modifying memory
+        println!("Action: {:?}", action);
+    }
 
-    let state_machine =
-        StateMachine::new(config_content, None, action_handler, memory, Context {})?;
+    // Create the StateMachine, ensuring the action_handler matches the expected type
+    let state_machine = StateMachine::new(
+        config_content,
+        None,
+        |action, memory, context| Box::pin(action_handler(action, memory, context)),
+        memory,
+        Context {},
+    )?;
 
     // Now you can trigger events and the validations will be applied
-    state_machine.trigger("proceed")?;
+    state_machine.trigger("proceed").await?;
 
     Ok(())
 }

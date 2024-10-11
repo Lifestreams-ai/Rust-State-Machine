@@ -4,7 +4,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
+use std::future::Future;
 use std::sync::{Arc, RwLock};
+use tokio::sync::RwLock as AsyncRwLock; // Alias to differentiate
 
 /// Represents an action with a type and command.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -16,7 +18,7 @@ pub struct Action {
 }
 
 /// A struct representing a state and its transitions, including actions on enter and exit.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct State {
     name: String,
     on_enter_actions: Vec<Action>,
@@ -26,7 +28,7 @@ struct State {
 }
 
 /// Represents a transition between states, including actions and validations.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Transition {
     to_state: String,
     actions: Vec<Action>,
@@ -103,23 +105,28 @@ struct ActionConfig {
     command: String,
 }
 
-type ActionHandler<C> = dyn Fn(&Action, &mut Map<String, Value>, &mut C) + Send + Sync;
+type ActionHandler<C> = dyn for<'a> Fn(
+        &'a Action,
+        &'a mut Map<String, Value>,
+        &'a mut C,
+    ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send + 'a>>
+    + Send
+    + Sync;
 
 /// The state machine containing all states, the current state, memory, context, and handlers.
-pub struct StateMachine<C> {
-    states: Arc<RwLock<HashMap<String, State>>>, // Key: state name, Value: state instance
+pub struct StateMachine<'a, C> {
+    states: Arc<RwLock<HashMap<String, State>>>,
     current_state: Arc<RwLock<String>>,
-    action_handler: Arc<ActionHandler<C>>, // Callback function for handling actions
-    /// The memory of the state machine. Memory is a map of key-value pairs
-    pub memory: Arc<RwLock<Map<String, Value>>>,
-    /// The user-provided context
-    pub context: Arc<RwLock<C>>,
+    action_handler: Arc<ActionHandler<C>>,
+    /// The memory used by the state machine to store data.
+    pub memory: Arc<AsyncRwLock<Map<String, Value>>>,
+    /// The context used by the state machine to store state.
+    pub context: Arc<AsyncRwLock<C>>,
+    _marker: std::marker::PhantomData<&'a ()>, // To tie the lifetime to the struct
 }
 
-impl<C> StateMachine<C> {
-    /// Creates a new state machine from a configuration string, optionally restoring to a specific state.
-    /// `initial_state` can be used to restore the machine to a saved state.
-    /// `memory` is the mutable state or memory of the state machine.
+impl<'a, C> StateMachine<'a, C> {
+    /// Creates a new state machine from a JSON configuration string.
     pub fn new<F>(
         config_content: &str,
         initial_state: Option<String>,
@@ -128,7 +135,14 @@ impl<C> StateMachine<C> {
         context: C,
     ) -> Result<Self, String>
     where
-        F: Fn(&Action, &mut Map<String, Value>, &mut C) + Send + Sync + 'static,
+        F: for<'b> Fn(
+                &'b Action,
+                &'b mut Map<String, Value>,
+                &'b mut C,
+            ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send + 'b>>
+            + Send
+            + Sync
+            + 'static,
     {
         // Generate and compile the JSON schema
         let schema = Self::generate_and_compile_schema()?;
@@ -189,8 +203,9 @@ impl<C> StateMachine<C> {
             states: Arc::new(RwLock::new(states)),
             current_state: Arc::new(RwLock::new(current_state)),
             action_handler: Arc::new(action_handler),
-            memory: Arc::new(RwLock::new(memory)),
-            context: Arc::new(RwLock::new(context)),
+            memory: Arc::new(AsyncRwLock::new(memory)),
+            context: Arc::new(AsyncRwLock::new(context)),
+            _marker: std::marker::PhantomData,
         })
     }
 
@@ -399,60 +414,91 @@ impl<C> StateMachine<C> {
     }
 
     /// Triggers an event, causing a state transition if applicable and executing actions.
-    pub fn trigger(&self, event: &str) -> Result<(), String> {
-        let current_state_name = self.current_state.read().unwrap().clone();
-        let states = self.states.read().unwrap();
+    pub async fn trigger(&self, event: &str) -> Result<(), String> {
+        // Acquire a read lock on the current state and clone its value
+        let current_state_name = {
+            let current_state_guard = self.current_state.read().unwrap();
+            current_state_guard.clone()
+        }; // Lock is released here
 
-        if let Some(current_state) = states.get(&current_state_name) {
-            // Get mutable references to the memory and context
-            let mut memory = self.memory.write().unwrap();
-            let mut context = self.context.write().unwrap();
-
-            // Execute state validations
-            Self::evaluate_validations(&current_state.validations, &memory)?;
-
-            if let Some(transition) = current_state.transitions.get(event) {
-                // Execute transition validations
-                Self::evaluate_validations(&transition.validations, &memory)?;
-
-                // Execute on-exit actions
-                self.execute_actions(&current_state.on_exit_actions, &mut memory, &mut context);
-
-                // Execute transition actions
-                self.execute_actions(&transition.actions, &mut memory, &mut context);
-
-                // Set the new current state
-                *self.current_state.write().unwrap() = transition.to_state.clone();
-
-                if let Some(next_state) = states.get(&transition.to_state) {
-                    // Execute on-enter actions of the next state
-                    self.execute_actions(&next_state.on_enter_actions, &mut memory, &mut context);
+        // Acquire a read lock on the states and get the current state and transition
+        let (current_state, transition) = {
+            let states_guard = self.states.read().unwrap();
+            // Clone the current state to own its data
+            let current_state = states_guard.get(&current_state_name).cloned();
+            if let Some(current_state) = current_state {
+                // Clone the transition to own its data
+                if let Some(transition) = current_state.transitions.get(event).cloned() {
+                    (current_state, transition)
+                } else {
+                    return Err(format!(
+                        "No transition found for event '{}' from state '{}'.",
+                        event, current_state_name
+                    ));
                 }
-
-                log::trace!(
-                    "Transitioning from {} to {} on event '{}'",
-                    current_state_name,
-                    transition.to_state,
-                    event
-                );
-                return Ok(());
+            } else {
+                return Err(format!(
+                    "Current state '{}' not found in state machine.",
+                    current_state_name
+                ));
             }
-        }
-        Err(format!(
-            "No transition found for event '{}' from state '{}'.",
-            event, current_state_name
-        ))
+        }; // Lock is released here
+
+        // Now `current_state` and `transition` own their data and do not borrow from `states_guard`
+
+        // Acquire write locks on memory and context
+        let mut memory = self.memory.write().await;
+        let mut context = self.context.write().await;
+
+        // Execute state validations
+        Self::evaluate_validations(&current_state.validations, &memory)?;
+
+        // Execute transition validations
+        Self::evaluate_validations(&transition.validations, &memory)?;
+
+        // Execute on-exit actions
+        self.execute_actions(&current_state.on_exit_actions, &mut memory, &mut context)
+            .await;
+
+        // Execute transition actions
+        self.execute_actions(&transition.actions, &mut memory, &mut context)
+            .await;
+
+        // Update the current state
+        {
+            let mut current_state_guard = self.current_state.write().unwrap();
+            *current_state_guard = transition.to_state.clone();
+        } // Lock is released here
+
+        // Execute on-enter actions of the next state
+        let next_state_on_enter_actions = {
+            let states_guard = self.states.read().unwrap();
+            if let Some(next_state) = states_guard.get(&transition.to_state) {
+                next_state.on_enter_actions.clone()
+            } else {
+                return Err(format!(
+                    "Next state '{}' not found in state machine.",
+                    transition.to_state
+                ));
+            }
+        }; // Lock is released here
+
+        // Now we can call execute_actions with the cloned actions
+        self.execute_actions(&next_state_on_enter_actions, &mut memory, &mut context)
+            .await;
+
+        Ok(())
     }
 
-    /// Executes a list of actions using the provided action handler.
-    fn execute_actions(
+    /// Executes a list of actions using the provided async action handler.
+    async fn execute_actions<'b>(
         &self,
         actions: &[Action],
-        memory: &mut Map<String, Value>,
-        context: &mut C,
+        memory: &'b mut Map<String, Value>,
+        context: &'b mut C,
     ) {
         for action in actions {
-            (self.action_handler)(action, memory, context); // Call the user-provided callback with the action, memory, and context
+            (self.action_handler)(action, memory, context).await;
         }
     }
 
@@ -641,14 +687,14 @@ impl<C> StateMachine<C> {
     }
 
     /// Returns the current state of the state machine.
-    pub fn get_current_state(&self) -> Result<String, String> {
-        let current_state = self.current_state.read().unwrap();
-        Ok((*current_state).clone())
+    pub async fn get_current_state(&self) -> Result<String, String> {
+        let current_state_guard = self.current_state.read().unwrap();
+        Ok(current_state_guard.clone())
     }
 }
 
 /// Implementing the Display trait to render the state machine as a string.
-impl<C> Display for StateMachine<C> {
+impl<'a, C> Display for StateMachine<'a, C> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let states = self.states.read().unwrap();
         let current_state = self.current_state.read().unwrap();

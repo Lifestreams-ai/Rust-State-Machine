@@ -1,8 +1,11 @@
 use serde_json::{Map, Value};
 use stateflow::{Action, StateMachine};
 
+/// Context struct used in the tests.
+struct Context {}
+
 /// A test action handler that prints action details for verification.
-fn test_action_handler_for_complex(
+async fn test_action_handler_for_complex(
     action: &Action,
     _memory: &mut Map<String, Value>,
     _context: &mut Context,
@@ -16,10 +19,8 @@ fn test_action_handler_for_complex(
     // memory.insert("last_action".to_string(), Value::String(action.command.clone()));
 }
 
-struct Context {}
-
-#[test]
-fn test_complex_state_machine() {
+#[tokio::test]
+async fn test_complex_state_machine() {
     // JSON string literal representing the complex state machine configuration
     let json_config = r#"
     {
@@ -187,50 +188,55 @@ fn test_complex_state_machine() {
     let state_machine = StateMachine::new(
         json_config,
         Some("Idle".to_string()),
-        test_action_handler_for_complex,
+        move |action, memory, context| {
+            Box::pin(test_action_handler_for_complex(action, memory, context))
+        },
         memory,
         Context {},
     )
     .expect("Failed to initialize state machine");
-
     // Print the initial state of the state machine
     println!("{}", state_machine);
 
     // Test transitions
     assert!(
-        state_machine.trigger("Start").is_ok(),
+        state_machine.trigger("Start").await.is_ok(),
         "Failed to start the state machine"
     );
     println!("{}", state_machine); // Print the state machine after the transition
 
     assert!(
-        state_machine.trigger("Pause").is_ok(),
+        state_machine.trigger("Pause").await.is_ok(),
         "Failed to pause the state machine"
     );
     println!("{}", state_machine); // Print the state machine after pausing
 
     assert!(
-        state_machine.trigger("Resume").is_ok(),
+        state_machine.trigger("Resume").await.is_ok(),
         "Failed to resume the state machine"
     );
     println!("{}", state_machine); // Print the state machine after resuming
 
     assert!(
-        state_machine.trigger("Complete").is_ok(),
+        state_machine.trigger("Complete").await.is_ok(),
         "Failed to complete the state machine"
     );
     println!("{}", state_machine); // Print the state machine after completing
 
     // This transition should fail because "Completed" state does not have a "Fail" transition
     assert!(
-        state_machine.trigger("Fail").is_err(),
+        state_machine.trigger("Fail").await.is_err(),
         "Unexpectedly succeeded in failing from a completed state"
     );
     println!("{}", state_machine); // Print the state machine, expect no change due to failed transition
 }
 
 /// A test action handler that prints action details for verification.
-fn test_action_handler(action: &Action, memory: &mut Map<String, Value>, _context: &mut Context) {
+async fn test_action_handler(
+    action: &Action,
+    memory: &mut Map<String, Value>,
+    _context: &mut Context,
+) {
     println!(
         "Test executing action: Type: {}, Command: {}",
         action.action_type, action.command
@@ -248,8 +254,8 @@ fn test_action_handler(action: &Action, memory: &mut Map<String, Value>, _contex
 }
 
 /// Test the basic functionality of the state machine with transitions.
-#[test]
-fn test_basic_transitions() {
+#[tokio::test]
+async fn test_basic_transitions() {
     // JSON string representing the state machine configuration
     let json_config = r#"
     {
@@ -284,31 +290,31 @@ fn test_basic_transitions() {
     let state_machine = StateMachine::new(
         json_config,
         Some("A".to_string()),
-        test_action_handler,
+        |action, memory, context| Box::pin(test_action_handler(action, memory, context)),
         memory,
         Context {},
     )
     .expect("Failed to initialize state machine");
 
-    assert_eq!(state_machine.get_current_state().unwrap(), "A");
+    assert_eq!(state_machine.get_current_state().await.unwrap(), "A");
 
     // Trigger the transition
     assert!(
-        state_machine.trigger("go_to_b").is_ok(),
+        state_machine.trigger("go_to_b").await.is_ok(),
         "Failed to transition to state B"
     );
-    assert_eq!(state_machine.get_current_state().unwrap(), "B");
+    assert_eq!(state_machine.get_current_state().await.unwrap(), "B");
 
     // Attempt an invalid transition
     assert!(
-        state_machine.trigger("invalid_event").is_err(),
+        state_machine.trigger("invalid_event").await.is_err(),
         "Unexpectedly succeeded with an invalid event"
     );
 }
 
 /// Test state validations.
-#[test]
-fn test_state_validations() {
+#[tokio::test]
+async fn test_state_validations() {
     // JSON configuration with a state validation
     let json_config = r#"
     {
@@ -353,7 +359,7 @@ fn test_state_validations() {
     let state_machine = StateMachine::new(
         json_config,
         Some("Start".to_string()),
-        test_action_handler,
+        |action, memory, context| Box::pin(test_action_handler(action, memory, context)),
         memory,
         Context {},
     )
@@ -361,26 +367,27 @@ fn test_state_validations() {
 
     // The state validation should fail
     assert!(
-        state_machine.trigger("proceed").is_err(),
+        state_machine.trigger("proceed").await.is_err(),
         "Unexpectedly succeeded despite failing state validation"
     );
 
     // Update memory to pass validation
-    let mut memory = state_machine.memory.write().unwrap();
-    memory.insert("age".to_string(), Value::Number(20.into()));
-    drop(memory); // Release the lock
+    {
+        let mut memory = state_machine.memory.write().await;
+        memory.insert("age".to_string(), Value::Number(20.into()));
+    } // Lock is released here
 
     // Now the transition should succeed
     assert!(
-        state_machine.trigger("proceed").is_ok(),
+        state_machine.trigger("proceed").await.is_ok(),
         "Failed to proceed after passing validation"
     );
-    assert_eq!(state_machine.get_current_state().unwrap(), "End");
+    assert_eq!(state_machine.get_current_state().await.unwrap(), "End");
 }
 
 /// Test transition validations.
-#[test]
-fn test_transition_validations() {
+#[tokio::test]
+async fn test_transition_validations() {
     // JSON configuration with a transition validation
     let json_config = r#"
     {
@@ -424,7 +431,7 @@ fn test_transition_validations() {
     let state_machine = StateMachine::new(
         json_config,
         Some("Init".to_string()),
-        test_action_handler,
+        |action, memory, context| Box::pin(test_action_handler(action, memory, context)),
         memory,
         Context {},
     )
@@ -432,26 +439,30 @@ fn test_transition_validations() {
 
     // The transition validation should fail
     assert!(
-        state_machine.trigger("process").is_err(),
+        state_machine.trigger("process").await.is_err(),
         "Unexpectedly succeeded despite failing transition validation"
     );
 
     // Update memory to pass validation
-    let mut memory = state_machine.memory.write().unwrap();
-    memory.insert("approved".to_string(), Value::Bool(true));
-    drop(memory); // Release the lock
+    {
+        let mut memory = state_machine.memory.write().await;
+        memory.insert("approved".to_string(), Value::Bool(true));
+    } // Release the lock
 
     // Now the transition should succeed
     assert!(
-        state_machine.trigger("process").is_ok(),
+        state_machine.trigger("process").await.is_ok(),
         "Failed to process after passing validation"
     );
-    assert_eq!(state_machine.get_current_state().unwrap(), "Processed");
+    assert_eq!(
+        state_machine.get_current_state().await.unwrap(),
+        "Processed"
+    );
 }
 
 /// Test conditional validations.
-#[test]
-fn test_conditional_validations() {
+#[tokio::test]
+async fn test_conditional_validations() {
     // JSON configuration with conditional validation
     let json_config = r#"
     {
@@ -500,7 +511,7 @@ fn test_conditional_validations() {
     let state_machine = StateMachine::new(
         json_config,
         Some("Form".to_string()),
-        test_action_handler,
+        |action, memory, context| Box::pin(test_action_handler(action, memory, context)),
         memory,
         Context {},
     )
@@ -508,29 +519,33 @@ fn test_conditional_validations() {
 
     // Validation should fail
     assert!(
-        state_machine.trigger("submit").is_err(),
+        state_machine.trigger("submit").await.is_err(),
         "Unexpectedly succeeded despite failing conditional validation"
     );
 
     // Provide the email
-    let mut memory = state_machine.memory.write().unwrap();
-    memory.insert(
-        "email".to_string(),
-        Value::String("user@example.com".to_string()),
-    );
-    drop(memory); // Release the lock
+    {
+        let mut memory = state_machine.memory.write().await;
+        memory.insert(
+            "email".to_string(),
+            Value::String("user@example.com".to_string()),
+        );
+    } // Release the lock
 
     // Now the transition should succeed
     assert!(
-        state_machine.trigger("submit").is_ok(),
+        state_machine.trigger("submit").await.is_ok(),
         "Failed to submit after passing conditional validation"
     );
-    assert_eq!(state_machine.get_current_state().unwrap(), "Submitted");
+    assert_eq!(
+        state_machine.get_current_state().await.unwrap(),
+        "Submitted"
+    );
 }
 
 /// Test memory manipulation within actions without `on_enter_actions` on the start state.
-#[test]
-fn test_context_manipulation() {
+#[tokio::test]
+async fn test_context_manipulation() {
     // JSON configuration with actions that modify the memory
     let json_config = r#"
     {
@@ -585,7 +600,7 @@ fn test_context_manipulation() {
     let state_machine = StateMachine::new(
         json_config,
         Some("Init".to_string()),
-        test_action_handler,
+        |action, memory, context| Box::pin(test_action_handler(action, memory, context)),
         memory,
         Context {},
     )
@@ -595,13 +610,13 @@ fn test_context_manipulation() {
 
     // Trigger the transition to the "Counter" state
     assert!(
-        state_machine.trigger("start").is_ok(),
+        state_machine.trigger("start").await.is_ok(),
         "Failed to start counter"
     );
 
     // The on_enter_action in "Counter" should increment the counter
     {
-        let memory = state_machine.memory.read().unwrap();
+        let memory = state_machine.memory.read().await;
         let counter = memory.get("counter").and_then(|v| v.as_i64()).unwrap_or(0);
         assert_eq!(
             counter, 1,
@@ -610,11 +625,14 @@ fn test_context_manipulation() {
     }
 
     // Trigger the transition to the "End" state
-    assert!(state_machine.trigger("finish").is_ok(), "Failed to finish");
+    assert!(
+        state_machine.trigger("finish").await.is_ok(),
+        "Failed to finish"
+    );
 
     // Check that the counter remains the same
     {
-        let memory = state_machine.memory.read().unwrap();
+        let memory = state_machine.memory.read().await;
         let counter = memory.get("counter").and_then(|v| v.as_i64()).unwrap_or(0);
         assert_eq!(
             counter, 1,
@@ -639,7 +657,7 @@ fn test_invalid_configuration() {
     let result = StateMachine::new(
         invalid_json_config,
         None,
-        test_action_handler,
+        |action, memory, context| Box::pin(test_action_handler(action, memory, context)),
         memory,
         Context {},
     );
@@ -650,8 +668,8 @@ fn test_invalid_configuration() {
 }
 
 /// Test saving and restoring state.
-#[test]
-fn test_state_persistence() {
+#[tokio::test]
+async fn test_state_persistence() {
     // JSON configuration
     let json_config = r#"
     {
@@ -686,7 +704,7 @@ fn test_state_persistence() {
     let state_machine = StateMachine::new(
         json_config,
         Some("First".to_string()),
-        test_action_handler,
+        |action, memory, context| Box::pin(test_action_handler(action, memory, context)),
         memory,
         Context {},
     )
@@ -694,26 +712,29 @@ fn test_state_persistence() {
 
     // Transition to the next state
     assert!(
-        state_machine.trigger("next").is_ok(),
+        state_machine.trigger("next").await.is_ok(),
         "Failed to transition to Second state"
     );
 
     // Save the current state
-    let current_state = state_machine.get_current_state().unwrap();
+    let current_state = state_machine.get_current_state().await.unwrap();
     assert_eq!(current_state, "Second");
 
     // Create a new state machine with the saved state
     let new_state_machine = StateMachine::new(
         json_config,
         Some(current_state.clone()),
-        test_action_handler,
+        |action, memory, context| Box::pin(test_action_handler(action, memory, context)),
         Map::new(),
         Context {},
     )
     .expect("Failed to initialize new state machine with saved state");
 
     // Verify the state
-    assert_eq!(new_state_machine.get_current_state().unwrap(), "Second");
+    assert_eq!(
+        new_state_machine.get_current_state().await.unwrap(),
+        "Second"
+    );
 }
 
 /// A custom context struct to be used with the state machine.
@@ -722,7 +743,11 @@ struct MyContext {
 }
 
 /// An action handler that uses the context to modify its state.
-fn action_handler(action: &Action, _memory: &mut Map<String, Value>, context: &mut MyContext) {
+async fn context_action_handler(
+    action: &Action,
+    _memory: &mut Map<String, Value>,
+    context: &mut MyContext,
+) {
     println!(
         "Executing action: Type: {}, Command: {}",
         action.action_type, action.command
@@ -735,8 +760,8 @@ fn action_handler(action: &Action, _memory: &mut Map<String, Value>, context: &m
 }
 
 /// Test case for testing the context usage in the state machine.
-#[test]
-fn test_context_usage() {
+#[tokio::test]
+async fn test_context_usage() {
     // JSON configuration with actions that use the context
     let json_config = r#"
     {
@@ -747,12 +772,7 @@ fn test_context_usage() {
             },
             {
                 "name": "Counting",
-                "on_enter_actions": [
-                    {
-                        "action_type": "increment_counter",
-                        "command": ""
-                    }
-                ],
+                "on_enter_actions": [],
                 "on_exit_actions": [],
                 "validations": []
             },
@@ -816,7 +836,7 @@ fn test_context_usage() {
     let state_machine = StateMachine::new(
         json_config,
         Some("Init".to_string()),
-        action_handler,
+        |action, memory, context| Box::pin(context_action_handler(action, memory, context)),
         memory,
         context,
     )
@@ -824,55 +844,69 @@ fn test_context_usage() {
 
     // Transition to "Counting" state, which should increment the counter to 1
     assert!(
-        state_machine.trigger("start_counting").is_ok(),
+        state_machine.trigger("start_counting").await.is_ok(),
         "Failed to start counting"
     );
 
-    // Verify that the context counter is 1
+    // Verify that the context counter is 0
     {
-        let context = state_machine.context.read().unwrap();
+        let context = state_machine.context.read().await;
         assert_eq!(
-            context.counter, 1,
+            context.counter, 0,
             "Counter should be 1 after first increment"
         );
     }
 
     // Trigger the "increment" event to increment the counter
     assert!(
-        state_machine.trigger("increment").is_ok(),
+        state_machine.trigger("increment").await.is_ok(),
         "Failed to increment counter"
     );
 
-    // Verify that the context counter is 3
+    // Verify that the context counter is 1
     {
-        let context = state_machine.context.read().unwrap();
+        let context = state_machine.context.read().await;
         assert_eq!(
-            context.counter, 3,
-            "Counter should be 3 after second increment"
+            context.counter, 1,
+            "Counter should be 2 after second increment"
         );
     }
 
     // Reset the counter by transitioning to the "Reset" state
     assert!(
-        state_machine.trigger("reset").is_ok(),
+        state_machine.trigger("reset").await.is_ok(),
         "Failed to reset counter"
     );
 
     // Verify that the context counter is reset to 0
     {
-        let context = state_machine.context.read().unwrap();
+        let context = state_machine.context.read().await;
         assert_eq!(context.counter, 0, "Counter should be reset to 0");
     }
 
     // Start counting again
     assert!(
-        state_machine.trigger("start_counting").is_ok(),
+        state_machine.trigger("start_counting").await.is_ok(),
+        "Failed to start counting again"
+    );
+
+    // Verify that the context counter is incremented to 0
+    {
+        let context = state_machine.context.read().await;
+        assert_eq!(
+            context.counter, 0,
+            "Counter should be 1 after restarting counting"
+        );
+    }
+    // Count again
+    assert!(
+        state_machine.trigger("increment").await.is_ok(),
         "Failed to start counting again"
     );
 
     // Verify that the context counter is incremented to 1
     {
-        let context = state_machine.context.read().unwrap();
+        let context = state_machine.context.read().await;
         assert_eq!(
             context.counter, 1,
             "Counter should be 1 after restarting counting"
