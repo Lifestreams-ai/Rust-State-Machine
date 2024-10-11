@@ -281,7 +281,7 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## Support
 
-If you have any questions or issues, please open an issue on [GitHub](https://github.com/Lifestreams-ai/stateflow/issues).
+If you have any questions or issues, please open an issue on [GitHub](https://github.com/Lifestreams-ai/statemachine/issues).
 
 ## Changelog
 
