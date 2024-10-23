@@ -68,7 +68,7 @@ This project provides a simple and extensible state machine library in Rust. It 
 
    ```toml
    [dependencies]
-   stateflow = "0.3.0"
+   stateflow = "0.4.0"
    ```
 
 2. **Update Crates**
