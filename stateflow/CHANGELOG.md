@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0]
+
+### Added
+
+- **Configuration Caching**: Implemented an LRU cache to store parsed and validated JSON configurations, enhancing performance by avoiding redundant parsing and validation when the same configuration is used multiple times.
+  - **Configurable Cache Size**: The size of the LRU cache can now be configured via the `STATEFLOW_LRU_CACHE_SIZE` environment variable. If not set, it defaults to `100`.
+
+### Changed
+
+- 
+
+### Fixed
+
+- 
+
 ## [0.3.0]
 
 - Add asynchronous action handling support.

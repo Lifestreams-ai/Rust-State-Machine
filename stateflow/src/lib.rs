@@ -1,10 +1,15 @@
 //! A simple state machine library for Rust.
 
+use lru::LruCache;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
+use std::env;
 use std::fmt::{self, Display, Formatter};
 use std::future::Future;
+use std::hash::{Hash, Hasher};
+use std::num::NonZero;
 use std::sync::{Arc, RwLock};
 use tokio::sync::RwLock as AsyncRwLock; // Alias to differentiate
 
@@ -113,6 +118,30 @@ type ActionHandler<C> = dyn for<'a> Fn(
     + Send
     + Sync;
 
+/// Define environment variable name and default cache size
+const LRU_CACHE_SIZE_ENV_KEY: &str = "STATEFLOW_LRU_CACHE_SIZE";
+const DEFAULT_CACHE_SIZE: usize = 100;
+
+/// Retrieves the LRU cache size from the environment variable.
+/// Defaults to `DEFAULT_CACHE_SIZE` if not set or invalid.
+fn get_cache_size() -> usize {
+    let lru_cache_size_env: usize = env::var(LRU_CACHE_SIZE_ENV_KEY)
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(DEFAULT_CACHE_SIZE);
+    if lru_cache_size_env == 0 {
+        DEFAULT_CACHE_SIZE
+    } else {
+        lru_cache_size_env
+    }
+}
+
+/// Static cache for storing parsed configurations
+static CONFIG_CACHE: Lazy<RwLock<LruCache<u64, Arc<StateMachineConfig>>>> = Lazy::new(|| {
+    let cache_size = get_cache_size();
+    RwLock::new(LruCache::new(NonZero::new(cache_size).unwrap()))
+});
+
 /// The state machine containing all states, the current state, memory, context, and handlers.
 pub struct StateMachine<'a, C> {
     states: Arc<RwLock<HashMap<String, State>>>,
@@ -144,31 +173,51 @@ impl<'a, C> StateMachine<'a, C> {
             + Sync
             + 'static,
     {
-        // Generate and compile the JSON schema
-        let schema = Self::generate_and_compile_schema()?;
+        // Compute the hash of the config_content
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        config_content.hash(&mut hasher);
+        let config_hash = hasher.finish();
 
-        // Parse the configuration from the provided string
-        let config_value: serde_json::Value = serde_json::from_str(config_content)
-            .map_err(|err| format!("Invalid JSON format in configuration: {}", err))?;
+        // Try to get the cached config
+        let config: Arc<StateMachineConfig> = {
+            let mut cache = CONFIG_CACHE.write().unwrap();
+            if let Some(cached_config) = cache.get(&config_hash) {
+                cached_config.clone()
+            } else {
+                // Parse and validate the config
+                // Generate and compile the JSON schema
+                let schema = Self::generate_and_compile_schema()?;
 
-        // Validate the configuration against the schema
-        let compiled_schema = jsonschema::Validator::new(&schema)
-            .map_err(|e| format!("Failed to compile JSON schema: {}", e))?;
-        if let Err(errors) = compiled_schema.validate(&config_value) {
-            let error_messages: Vec<String> = errors.map(|e| e.to_string()).collect();
-            return Err(format!(
-                "JSON configuration does not conform to schema: {}",
-                error_messages.join(", ")
-            ));
-        }
+                // Parse the configuration from the provided string
+                let config_value: serde_json::Value = serde_json::from_str(config_content)
+                    .map_err(|err| format!("Invalid JSON format in configuration: {}", err))?;
 
-        // Deserialize the configuration
-        let config: StateMachineConfig = serde_json::from_value(config_value)
-            .map_err(|err| format!("Failed to deserialize configuration: {}", err))?;
+                // Validate the configuration against the schema
+                let compiled_schema = jsonschema::Validator::new(&schema)
+                    .map_err(|e| format!("Failed to compile JSON schema: {}", e))?;
+                if let Err(errors) = compiled_schema.validate(&config_value) {
+                    let error_messages: Vec<String> = errors.map(|e| e.to_string()).collect();
+                    return Err(format!(
+                        "JSON configuration does not conform to schema: {}",
+                        error_messages.join(", ")
+                    ));
+                }
 
-        // Validate the config
-        Self::validate_config(&config)?;
+                // Deserialize the configuration
+                let config_deserialized: StateMachineConfig = serde_json::from_value(config_value)
+                    .map_err(|err| format!("Failed to deserialize configuration: {}", err))?;
 
+                // Validate the config
+                Self::validate_config(&config_deserialized)?;
+
+                // Cache the config
+                let config_arc = Arc::new(config_deserialized);
+                cache.put(config_hash, config_arc.clone());
+                config_arc
+            }
+        };
+
+        // Now proceed to create the StateMachine using `config`
         // Create states and populate transitions
         let mut states = HashMap::new();
         for state_config in &config.states {

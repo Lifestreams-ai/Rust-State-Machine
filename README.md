@@ -11,6 +11,7 @@ A simple and extensible state machine library in Rust.
 <!-- omit in toc -->
 ## Features
 
+- **Configuration Caching**: Parsed JSON configurations are cached in memory using an LRU cache, improving performance by avoiding redundant parsing and validation when the same configuration is used multiple times. The cache size can be configured via an environment variable.
 - **JSON Configuration**: Define states, events, transitions, actions, and validations via a JSON file.
 - **On-Enter and On-Exit Actions**: Execute specific actions when entering or exiting a state.
 - **Transition Actions**: Perform actions during state transitions.
@@ -35,6 +36,8 @@ A simple and extensible state machine library in Rust.
   - [2. Implement the Action Handler](#2-implement-the-action-handler)
   - [3. Initialize the State Machine](#3-initialize-the-state-machine)
   - [4. Run Your Application](#4-run-your-application)
+  - [Note](#note)
+    - [Setting the Environment Variable:](#setting-the-environment-variable)
 - [Configuration](#configuration)
 - [Contributing](#contributing)
 - [License](#license)
@@ -201,6 +204,15 @@ Compile and run your application:
 ```bash
 cargo run
 ```
+### Note
+#### Setting the Environment Variable:
+To configure the cache size, set the `STATEFLOW_LRU_CACHE_SIZE` environment variable before running your application.
+
+```bash
+export STATEFLOW_LRU_CACHE_SIZE=200
+```
+
+If not set, the cache size defaults to `100`.
 
 ## Configuration
 
@@ -276,7 +288,9 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 ## Credits
 
 - **[Serde](https://serde.rs/)**: For serialization and deserialization.
-- **[JSON Schema](https://json-schema.org/)**: For configuration validation.
+- **[JSON Schema](https://crates.io/crates/jsonschema)**: For configuration validation.
+- **[once_cell](https://crates.io/crates/once_cell)**: For lazy static initialization.
+- **[lru](https://crates.io/crates/lru)**: For the LRU cache implementation
 - **Rust Community**: For the rich ecosystem and support.
 
 ## Support
@@ -285,7 +299,7 @@ If you have any questions or issues, please open an issue on [GitHub](https://gi
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) for version history.
+See [CHANGELOG.md](stateflow/CHANGELOG.md) for version history.
 
 ## Roadmap
 
@@ -300,6 +314,10 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 **A**: Yes, the state machine is thread-safe using `Arc` and `RwLock`.
 
+**Q**: How does the configuration caching work?
+
+**A**: The state machine caches parsed configurations using an LRU cache. It uses a hash of the JSON configuration string to detect changes and invalidate cache entries, improving performance by avoiding redundant parsing and validation.
+
 **Q**: How do I handle custom action types?
 
 **A**: Implement your logic within the `action_handler` function based on the `action_type`.
@@ -310,7 +328,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 ## Code of Conduct
 
-We expect all contributors to adhere to our [Code of Conduct](CODE_OF_CONDUCT.md).
+We expect all contributors to adhere to our [Code of Conduct](stateflow/CODE_OF_CONDUCT.md).
 
 ---
 
