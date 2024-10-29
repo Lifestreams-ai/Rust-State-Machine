@@ -195,11 +195,10 @@ impl<'a, C> StateMachine<'a, C> {
                 // Validate the configuration against the schema
                 let compiled_schema = jsonschema::Validator::new(&schema)
                     .map_err(|e| format!("Failed to compile JSON schema: {}", e))?;
-                if let Err(errors) = compiled_schema.validate(&config_value) {
-                    let error_messages: Vec<String> = errors.map(|e| e.to_string()).collect();
+                if let Err(error) = compiled_schema.validate(&config_value) {
                     return Err(format!(
                         "JSON configuration does not conform to schema: {}",
-                        error_messages.join(", ")
+                        error
                     ));
                 }
 
