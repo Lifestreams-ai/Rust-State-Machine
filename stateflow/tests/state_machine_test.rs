@@ -1,3 +1,4 @@
+//! This module contains tests for the state machine implementation.
 use serde_json::{Map, Value};
 use stateflow::{Action, StateMachine};
 

@@ -154,7 +154,7 @@ pub struct StateMachine<'a, C> {
     _marker: std::marker::PhantomData<&'a ()>, // To tie the lifetime to the struct
 }
 
-impl<'a, C> StateMachine<'a, C> {
+impl<C> StateMachine<'_, C> {
     /// Creates a new state machine from a JSON configuration string.
     pub fn new<F>(
         config_content: &str,
@@ -742,7 +742,7 @@ impl<'a, C> StateMachine<'a, C> {
 }
 
 /// Implementing the Display trait to render the state machine as a string.
-impl<'a, C> Display for StateMachine<'a, C> {
+impl<C> Display for StateMachine<'_, C> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let states = self.states.read().unwrap();
         let current_state = self.current_state.read().unwrap();
